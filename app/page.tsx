@@ -16,20 +16,21 @@ export default async function Home() {
 
   return (
     <div className="max-w-6xl mx-auto p-6">
-      <h1 className="text-3xl font-bold text-center mb-8">Candidats en lice</h1>
+      <h1 className="text-3xl font-bold text-center mb-8">Candidats en ligne</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {candidates?.map((candidate) => (
           <div key={candidate.id} className="border rounded-xl overflow-hidden shadow hover:shadow-lg transition">
-            {candidate.image_url && (
-              <div className="relative h-48 w-full bg-gray-100">
-                <Image
-                  src={candidate.image_url}
-                  alt={candidate.name}
-                  fill
-                  className="object-cover"
-                />
-              </div>
-            )}
+    {candidate.image_url && (
+  <div className="w-full bg-gray-100">
+    <img
+      src={candidate.image_url}
+      alt={candidate.name}
+      className="w-full h-auto block"
+    />
+  </div>
+)}
+
+
             <div className="p-4">
               <h2 className="text-xl font-semibold">{candidate.name}</h2>
               {candidate.country && <p className="text-sm text-gray-500">{candidate.country}</p>}

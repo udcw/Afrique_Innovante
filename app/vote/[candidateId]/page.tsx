@@ -25,9 +25,10 @@ export default function VotePage() {
 
   useEffect(() => {
     const fetchCandidate = async () => {
+      // Ajout de image_url dans la sélection
       const { data, error } = await supabase
         .from('candidates')
-        .select('name, bio, country')
+        .select('name, bio, country, image_url')
         .eq('id', candidateId)
         .single()
       if (error) setError("Candidat introuvable")
@@ -103,7 +104,6 @@ export default function VotePage() {
 
     if (insertError) {
       console.error(insertError)
-      // Gestion des erreurs de contrainte d'unicité
       if (insertError.message.includes('duplicate key') || insertError.code === '23505') {
         if (insertError.message.includes('ip')) {
           setError("Cette adresse IP a déjà voté. Si vous êtes plusieurs à la même connexion, contactez l'administrateur.")
@@ -116,7 +116,6 @@ export default function VotePage() {
         setError("Erreur : " + insertError.message)
       }
     } else {
-      // Incrémentation du compteur (optionnel)
       try {
         await supabase.rpc('increment_vote_count', { candidate_id: candidateId })
       } catch (err) {
@@ -144,8 +143,20 @@ export default function VotePage() {
 
   return (
     <div className="max-w-md mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-2">Votez pour {candidate.name}</h1>
-      {candidate.country && <p className="text-gray-500 mb-4">{candidate.country}</p>}
+      <h1 className="text-2xl font-bold mb-2 text-center">Votez pour {candidate.name}</h1>
+      {candidate.country && <p className="text-gray-500 text-center mb-4">{candidate.country}</p>}
+
+      {/* Afficher la photo du candidat si elle existe */}
+      {candidate.image_url && (
+  <div className="flex justify-center mb-6">
+    <img
+      src={candidate.image_url}
+      alt={candidate.name}
+      className="max-w-full max-h-64 object-contain rounded-lg shadow"
+    />
+  </div>
+)}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block font-medium">Email *</label>

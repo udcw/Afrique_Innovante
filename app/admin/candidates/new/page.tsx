@@ -2,7 +2,8 @@
 
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
+import { useDropzone } from 'react-dropzone'
 
 export default function NewCandidate() {
   const router = useRouter()
@@ -11,28 +12,75 @@ export default function NewCandidate() {
   const [country, setCountry] = useState('')
   const [countryCode, setCountryCode] = useState('')
   const [bio, setBio] = useState('')
-  const [imageUrl, setImageUrl] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  // Générer un slug à partir du nom
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const file = acceptedFiles[0]
+    if (file) {
+      setImageFile(file)
+      setImagePreview(URL.createObjectURL(file))
+    }
+  }, [])
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'image/*': [] },
+    maxFiles: 1,
+  })
+
   const generateSlug = () => {
-    const slug = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')
-    setSlug(slug)
+    const newSlug = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')
+    setSlug(newSlug)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    const { error } = await supabase.from('candidates').insert({
-      name,
-      slug: slug || name.toLowerCase().replace(/\s+/g, '-'),
-      country,
-      country_code: countryCode,
-      bio,
-      image_url: imageUrl,
-      is_active: true,
-      votes_count: 0
-    })
+    setUploading(false)
+
+    let imageUrl: string | null = null
+
+    // Upload image si présente
+    if (imageFile) {
+      setUploading(true)
+      const fileExt = imageFile.name.split('.').pop()
+      const fileName = `${slug || name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.${fileExt}`
+      const { error: uploadError } = await supabase.storage
+        .from('candidates')
+        .upload(fileName, imageFile)
+
+      if (uploadError) {
+        alert("Erreur upload : " + uploadError.message)
+        setLoading(false)
+        setUploading(false)
+        return
+      }
+      // Récupérer l'URL publique
+      const { data: publicUrlData } = supabase.storage
+        .from('candidates')
+        .getPublicUrl(fileName)
+      imageUrl = publicUrlData.publicUrl
+      setUploading(false)
+    }
+
+    const finalSlug = slug || name.toLowerCase().replace(/\s+/g, '-')
+
+    const { error } = await supabase
+      .from('candidates')
+      .insert({
+        name,
+        slug: finalSlug,
+        country,
+        country_code: countryCode,
+        bio,
+        image_url: imageUrl,
+        is_active: true,
+        votes_count: 0,
+      })
+
     if (error) {
       alert("Erreur : " + error.message)
     } else {
@@ -94,21 +142,27 @@ export default function NewCandidate() {
           />
         </div>
         <div>
-          <label className="block font-medium">URL de l'image</label>
-          <input
-            type="url"
-            value={imageUrl}
-            onChange={e => setImageUrl(e.target.value)}
-            className="w-full border rounded px-3 py-2"
-            placeholder="https://..."
-          />
+          <label className="block font-medium">Photo du candidat</label>
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition ${
+              isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+            }`}
+          >
+            <input {...getInputProps()} />
+            {imagePreview ? (
+              <img src={imagePreview} alt="Aperçu" className="max-h-40 mx-auto rounded" />
+            ) : (
+              <p>Glissez une image ici ou cliquez pour sélectionner</p>
+            )}
+          </div>
         </div>
         <button
           type="submit"
-          disabled={loading}
-          className="bg-green-600 text-white px-4 py-2 rounded w-full"
+          disabled={loading || uploading}
+          className="bg-green-600 text-white px-4 py-2 rounded w-full disabled:opacity-50"
         >
-          {loading ? 'Création...' : 'Créer le candidat'}
+          {uploading ? 'Upload en cours...' : loading ? 'Création...' : 'Créer le candidat'}
         </button>
       </form>
     </div>
