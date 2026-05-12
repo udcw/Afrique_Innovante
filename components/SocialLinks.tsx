@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { FaInstagram, FaFacebook, FaTiktok, FaYoutube } from 'react-icons/fa'
 
 const SOCIAL_LINKS = [
-  { name: 'Instagram', url: process.env.NEXT_PUBLIC_SOCIAL_INSTAGRAM!, icon: '📸' },
-  { name: 'Facebook', url: process.env.NEXT_PUBLIC_SOCIAL_FACEBOOK!, icon: '📘' },
-  { name: 'TikTok', url: process.env.NEXT_PUBLIC_SOCIAL_TIKTOK!, icon: '🎵' },
-  { name: 'YouTube', url: process.env.NEXT_PUBLIC_SOCIAL_YOUTUBE!, icon: '▶️' },
+  { name: 'Instagram', url: process.env.NEXT_PUBLIC_SOCIAL_INSTAGRAM!, icon: FaInstagram },
+  { name: 'Facebook', url: process.env.NEXT_PUBLIC_SOCIAL_FACEBOOK!, icon: FaFacebook },
+  { name: 'TikTok', url: process.env.NEXT_PUBLIC_SOCIAL_TIKTOK!, icon: FaTiktok },
+  { name: 'YouTube', url: process.env.NEXT_PUBLIC_SOCIAL_YOUTUBE!, icon: FaYoutube },
 ]
 
 export default function SocialLinks() {
@@ -31,7 +32,7 @@ export default function SocialLinks() {
           className="text-2xl hover:opacity-80 transition"
           aria-label={social.name}
         >
-          {social.icon}
+          <social.icon />
         </a>
       ))}
     </div>
