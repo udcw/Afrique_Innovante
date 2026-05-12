@@ -22,6 +22,8 @@ export default function VotePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [showGate, setShowGate] = useState(false)
+  const [socialDone, setSocialDone] = useState(false)
 
   useEffect(() => {
     const fetchCandidate = async () => {
@@ -46,6 +48,12 @@ export default function VotePage() {
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
+    if (!socialDone) {
+    e.preventDefault()
+    setShowGate(true)
+    return
+   }
+    
     e.preventDefault()
     setLoading(true)
     setError('')
@@ -155,6 +163,63 @@ export default function VotePage() {
       className="max-w-full max-h-64 object-contain rounded-lg shadow"
     />
   </div>
+
+      {showGate && (
+  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    
+    <div className="bg-white p-6 rounded-xl max-w-md w-full">
+
+      <h2 className="text-xl font-bold text-center mb-3">
+        Vérification obligatoire
+      </h2>
+
+      <p className="text-sm text-gray-600 text-center mb-5">
+        Avant de voter, vous devez ouvrir nos réseaux sociaux.
+      </p>
+
+      <div className="space-y-3">
+        <button
+          onClick={() => window.open(process.env.NEXT_PUBLIC_SOCIAL_FACEBOOK!, '_blank')}
+          className="w-full bg-blue-600 text-white py-2 rounded-lg"
+        >
+          Ouvrir Facebook
+        </button>
+
+        <button
+          onClick={() => window.open(process.env.NEXT_PUBLIC_SOCIAL_INSTAGRAM!, '_blank')}
+          className="w-full bg-pink-600 text-white py-2 rounded-lg"
+        >
+          Ouvrir Instagram
+        </button>
+
+        <button
+          onClick={() => window.open(process.env.NEXT_PUBLIC_SOCIAL_TIKTOK!, '_blank')}
+          className="w-full bg-black text-white py-2 rounded-lg"
+        >
+          Ouvrir TikTok
+        </button>
+
+        <button
+          onClick={() => window.open(process.env.NEXT_PUBLIC_SOCIAL_YOUTUBE!, '_blank')}
+          className="w-full bg-red-600 text-white py-2 rounded-lg"
+        >
+          Ouvrir YouTube
+        </button>
+      </div>
+
+      <button
+        onClick={() => {
+          setSocialDone(true)
+          setShowGate(false)
+        }}
+        className="mt-5 w-full bg-green-600 text-white py-2 rounded-lg"
+      >
+        J’ai terminé
+      </button>
+
+    </div>
+  </div>
+)}
 )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
