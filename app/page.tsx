@@ -7,7 +7,7 @@ export default async function Home() {
     .from('candidates')
     .select('id, name, bio, image_url, country, votes_count')
     .eq('is_active', true)
-    .order('name')
+    .order('votes_count', { ascending: false })
 
   if (error) {
     console.error(error)
