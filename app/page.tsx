@@ -81,7 +81,7 @@ export default function Home() {
       {/* Comment voter */}
       <div className="bg-gray-100 dark:bg-gray-800/50 py-16">
         <div className="max-w-6xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center text-gray-800 dark:text-white mb-12"> COMMENT VOTER ?</h2>
+          <h2 className="text-3xl font-bold text-center text-gray-800 dark:text-white mb-12">📌 COMMENT VOTER ?</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md text-center">
               <div className="text-3xl font-bold text-blue-600 mb-2 flex justify-center"><FaSearch /></div>
@@ -118,7 +118,7 @@ export default function Home() {
       {/* Liste des candidates */}
       <div className="max-w-7xl mx-auto px-6 py-16">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-800 dark:text-white"> Candidates en ligne</h2>
+          <h2 className="text-3xl font-bold text-gray-800 dark:text-white">🏆 Candidates en lice</h2>
           <p className="text-gray-500 dark:text-gray-400 mt-2">Votez pour l’une des 100 femmes sélectionnées</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">

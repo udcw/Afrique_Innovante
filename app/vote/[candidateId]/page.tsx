@@ -1,9 +1,7 @@
 'use client'
-
 import { supabase } from '@/lib/supabaseClient'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 import { FaInstagram, FaFacebook, FaTiktok, FaYoutube } from 'react-icons/fa'
 
 async function sha256(message: string): Promise<string> {
@@ -25,28 +23,25 @@ export default function VotePage() {
   const { candidateId } = useParams()
   const router = useRouter()
   const [candidate, setCandidate] = useState<any>(null)
-  const [email, setEmail] = useState('')
   const [country, setCountry] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
-  const [showSocial, setShowSocial] = useState(false)
-  const [clickedLinks, setClickedLinks] = useState<{ [key: string]: boolean }>({
-    Instagram: false,
-    Facebook: false,
-    TikTok: false,
-    YouTube: false,
-  })
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const [socialChecks, setSocialChecks] = useState<{ [key: string]: boolean }>({
     Instagram: false,
     Facebook: false,
     TikTok: false,
     YouTube: false,
   })
+  const [clickedLinks, setClickedLinks] = useState<{ [key: string]: boolean }>({
+    Instagram: false,
+    Facebook: false,
+    TikTok: false,
+    YouTube: false,
+  })
+  const [expiresAt, setExpiresAt] = useState<Date | null>(null)
 
-  const delaySeconds = parseInt(process.env.NEXT_PUBLIC_SOCIAL_DELAY_SECONDS || '5', 10)
-
-  // Chargement du candidat
   useEffect(() => {
     const fetchCandidate = async () => {
       const { data, error } = await supabase
@@ -60,7 +55,6 @@ export default function VotePage() {
     fetchCandidate()
   }, [candidateId])
 
-  // Détection du pays
   useEffect(() => {
     fetch('https://ipapi.co/json/')
       .then(res => res.json())
@@ -68,115 +62,118 @@ export default function VotePage() {
       .catch(() => setCountry('Non détecté'))
   }, [])
 
-  // Affichage différé des réseaux sociaux
+  // Créer une session au chargement de la page (si aucune session en cours)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowSocial(true)
-    }, delaySeconds * 1000)
-    return () => clearTimeout(timer)
-  }, [delaySeconds])
+    const initSession = async () => {
+      // Récupérer l'IP et la hacher
+      let ip = ''
+      try {
+        const res = await fetch('https://api.ipify.org?format=json')
+        const data = await res.json()
+        ip = data.ip
+      } catch { ip = 'unknown' }
+      const ipHash = await sha256(ip)
 
-  const handleLinkClick = (platform: string) => {
-    setClickedLinks(prev => ({ ...prev, [platform]: true }))
+      // Vérifier s'il existe déjà une session incomplète pour cette IP et ce candidat
+      const { data: existing } = await supabase
+        .from('vote_sessions')
+        .select('id, social_checks, expires_at, is_complete')
+        .eq('ip_hash', ipHash)
+        .eq('candidate_id', candidateId)
+        .eq('is_complete', false)
+        .maybeSingle()
+
+      if (existing) {
+        // Reprendre la session existante
+        setSessionId(existing.id)
+        setExpiresAt(new Date(existing.expires_at))
+        if (existing.social_checks) {
+          setSocialChecks(existing.social_checks)
+          setClickedLinks(existing.social_checks) // Pour préremplir les cases
+        }
+      } else {
+        // Créer une nouvelle session
+        const { data: newSession, error: insertError } = await supabase
+          .from('vote_sessions')
+          .insert({
+            candidate_id: candidateId,
+            ip_hash: ipHash,
+            social_checks: {},
+            is_complete: false,
+          })
+          .select('id, expires_at')
+          .single()
+
+        if (!insertError && newSession) {
+          setSessionId(newSession.id)
+          setExpiresAt(new Date(newSession.expires_at))
+        } else {
+          console.error("Erreur création session", insertError)
+        }
+      }
+    }
+    if (candidateId) initSession()
+  }, [candidateId])
+
+  const handleLinkClick = async (platform: string) => {
+    if (!sessionId) return
+    const newClicked = { ...clickedLinks, [platform]: true }
+    setClickedLinks(newClicked)
+    // Mettre à jour la session (on peut stocker les clics ou attendre les cases)
   }
 
-  const handleCheck = (platform: string, checked: boolean) => {
+  const handleCheck = async (platform: string, checked: boolean) => {
     if (!clickedLinks[platform]) return
-    setSocialChecks(prev => ({ ...prev, [platform]: checked }))
+    const newChecks = { ...socialChecks, [platform]: checked }
+    setSocialChecks(newChecks)
+    // Sauvegarder l'état dans la session
+    if (sessionId) {
+      await supabase
+        .from('vote_sessions')
+        .update({ social_checks: newChecks })
+        .eq('id', sessionId)
+    }
   }
 
   const allSocialChecked = Object.values(socialChecks).every(v => v === true)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleConfirmVote = async () => {
+    if (!sessionId) return
     setLoading(true)
     setError('')
 
-    // Vérifications de base
-    if (!email.trim()) {
-      setError("L'email est requis")
-      setLoading(false)
-      return
-    }
     if (!allSocialChecked) {
-      setError("Vous devez cliquer sur tous les liens et cocher toutes les cases.")
+      setError("Vous devez cocher toutes les cases.")
       setLoading(false)
       return
     }
 
-    // Récupération de l'IP et hashage
-    let ip = ''
-    try {
-      const res = await fetch('https://api.ipify.org?format=json')
-      const data = await res.json()
-      ip = data.ip
-    } catch {
-      ip = 'unknown'
-    }
+    // Marquer la session comme complète
+    const { error: updateError } = await supabase
+      .from('vote_sessions')
+      .update({ is_complete: true })
+      .eq('id', sessionId)
 
-    const emailHash = await sha256(email.trim().toLowerCase())
-    const ipHash = await sha256(ip)
-
-    let deviceId = localStorage.getItem('device_id')
-    if (!deviceId) {
-      deviceId = uuidv4()
-      localStorage.setItem('device_id', deviceId)
-    }
-
-    // Vérification : email déjà utilisé (tous candidats)
-    const { data: existingEmail } = await supabase
-      .from('votes')
-      .select('id')
-      .eq('voter_email_hash', emailHash)
-      .maybeSingle()
-
-    if (existingEmail) {
-      setError("Vous avez déjà voté. Un seul vote par email est autorisé.")
-      setLoading(false)
-      return
-    }
-
-    // Vérification : IP déjà utilisée (tous candidats)
-    const { data: existingIp } = await supabase
-      .from('votes')
-      .select('id')
-      .eq('ip_hash', ipHash)
-      .maybeSingle()
-
-    if (existingIp) {
-      setError("Cette adresse IP a déjà voté. Un seul vote par connexion est autorisé.")
-      setLoading(false)
-      return
-    }
-
-    // Insertion du vote
-    const { error: insertError } = await supabase
-      .from('votes')
-      .insert({
-        candidate_id: candidateId,
-        voter_email: email,
-        voter_email_hash: emailHash,
-        voter_country: country,
-        ip_address: ip,
-        ip_hash: ipHash,
-        device_id: deviceId,
-        social_checks: socialChecks,
-      })
-
-    if (insertError) {
-      console.error(insertError)
-      setError("Erreur : " + insertError.message)
+    if (updateError) {
+      setError("Erreur lors de la validation du vote.")
     } else {
-      // Incrémentation du compteur (optionnel)
-      try {
-        await supabase.rpc('increment_vote_count', { candidate_id: candidateId })
-      } catch (err) {
-        console.warn("Incrémentation échouée:", err)
-      }
+      // Incrémenter le compteur du candidat
+      await supabase.rpc('increment_vote_count', { candidate_id: candidateId })
       setSuccess(true)
       setTimeout(() => router.push('/'), 3000)
     }
     setLoading(false)
+  }
+
+  // Vérifier si la session a expiré
+  if (expiresAt && new Date() > expiresAt) {
+    return (
+      <div className="max-w-md mx-auto p-6 text-center">
+        <div className="bg-red-100 text-red-700 p-4 rounded-lg">
+          Votre session a expiré (30 min). Veuillez recharger la page pour recommencer.
+        </div>
+      </div>
+    )
   }
 
   if (error && !candidate) return <div className="p-8 text-red-500">{error}</div>
@@ -197,80 +194,48 @@ export default function VotePage() {
     <div className="max-w-md mx-auto p-6">
       <h1 className="text-2xl font-bold mb-2 text-center">Votez pour {candidate.name}</h1>
       {candidate.country && <p className="text-gray-500 text-center mb-4">{candidate.country}</p>}
-
       {candidate.image_url && (
         <div className="flex justify-center mb-6">
           <img src={candidate.image_url} alt={candidate.name} className="max-w-full max-h-64 object-contain rounded-lg shadow" />
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block font-medium">Email *</label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full border rounded px-3 py-2"
-            placeholder="votre@email.com"
-          />
-        </div>
-        <div>
-          <label className="block font-medium">Pays</label>
-          <input type="text" value={country} disabled className="w-full border rounded px-3 py-2 bg-gray-100" />
-        </div>
-
-        {!showSocial ? (
-          <div className="text-center py-4 text-gray-500 animate-pulse">
-            Chargez les réseaux sociaux... ({delaySeconds} secondes)
-          </div>
-        ) : (
-          <div className="border rounded-lg p-4 bg-gray-50 dark:bg-zinc-800">
-            <p className="font-medium mb-2">Pour voter, vous devez suivre nos pages :</p>
-            <div className="space-y-2">
-              {SOCIAL_LINKS.map((social) => (
-                <div key={social.name} className="flex items-center justify-between gap-2">
-                  <a
-                    href={social.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => handleLinkClick(social.name)}
-                    className="flex items-center gap-2 text-blue-600 hover:underline"
-                  >
-                    <social.icon className="text-xl" />
-                    {social.name}
-                  </a>
-                  <label className="flex items-center gap-1 text-sm">
-                    <input
-                      type="checkbox"
-                      disabled={!clickedLinks[social.name]}
-                      checked={socialChecks[social.name]}
-                      onChange={(e) => handleCheck(social.name, e.target.checked)}
-                    />
-                    Je suis abonné(e)
-                  </label>
-                </div>
-              ))}
+      <div className="border rounded-lg p-4 bg-gray-50 dark:bg-zinc-800 mb-4">
+        <p className="font-medium mb-2">Pour voter, vous devez suivre nos pages :</p>
+        <div className="space-y-2">
+          {SOCIAL_LINKS.map((social) => (
+            <div key={social.name} className="flex items-center justify-between gap-2">
+              <a
+                href={social.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => handleLinkClick(social.name)}
+                className="flex items-center gap-2 text-blue-600 hover:underline"
+              >
+                <social.icon className="text-xl" />
+                {social.name}
+              </a>
+              <label className="flex items-center gap-1 text-sm">
+                <input
+                  type="checkbox"
+                  disabled={!clickedLinks[social.name]}
+                  checked={socialChecks[social.name]}
+                  onChange={(e) => handleCheck(social.name, e.target.checked)}
+                />
+                Je suis abonné(e)
+              </label>
             </div>
-            {(!clickedLinks.Instagram || !clickedLinks.Facebook || !clickedLinks.TikTok || !clickedLinks.YouTube) && (
-              <p className="text-gray-500 text-xs mt-2">* Cliquez sur chaque lien, puis cochez la case correspondante.</p>
-            )}
-            {!allSocialChecked && showSocial && clickedLinks.Instagram && clickedLinks.Facebook && clickedLinks.TikTok && clickedLinks.YouTube && (
-              <p className="text-red-500 text-xs mt-2">Cochez toutes les cases pour voter.</p>
-            )}
-          </div>
-        )}
-
-        {error && <p className="text-red-500 text-sm">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading || !showSocial || !allSocialChecked}
-          className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Traitement...' : 'Confirmer mon vote'}
-        </button>
-      </form>
+          ))}
+        </div>
+      </div>
+      {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+      <button
+        onClick={handleConfirmVote}
+        disabled={loading || !allSocialChecked}
+        className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+      >
+        {loading ? 'Traitement...' : 'Confirmer mon vote'}
+      </button>
     </div>
   )
 }
